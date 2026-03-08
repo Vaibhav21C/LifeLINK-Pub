@@ -586,8 +586,9 @@ document.getElementById('judgeDemoBtn').addEventListener('click', function() {
         },
         body: JSON.stringify({
             incident_id: "CRASH-DEMO-991",
-            location: "22.6116, 77.7810", // Hardcoded GPS for the demo
-            severity: "HIGH"
+            gps_location: "22.6116, 77.7810", // Changed from 'location'
+            severity: "HIGH",
+            patient_id: "PATIENT-001"         // Added to satisfy FastAPI
         })
     })
     .then(response => {
