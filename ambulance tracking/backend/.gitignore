@@ -1,0 +1,17 @@
+.env
+__pycache__/
+*.pyc
+matches_debug.txt
+rishi_tags.txt
+test_final_check.txt
+test_final_utf8.txt
+test_mumbai_out.txt
+test_output.txt
+test_output_utf8.txt
+test_strict_utf8.txt
+check_*.py
+debug_*.py
+find_*.py
+inspect_*.py
+test_*.py
+verify_*.py

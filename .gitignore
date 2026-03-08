@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.env
+.env.*
+
+# Build output
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+
+# Extra utility scripts
+clean_file.py
+read_file.py
+read_repr.py
+read_safe.py
+Lifelink_spec.txt
+Lifelink_spec_clean.txt

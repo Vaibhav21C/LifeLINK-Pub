@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LifeLink ER Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #080c14;
+            --surface: #0d1321;
+            --surface2: #111827;
+            --border: rgba(255, 255, 255, 0.08);
+            --red: #ef4444;
+            --red-glow: rgba(239, 68, 68, 0.25);
+            --green: #22c55e;
+            --blue: #3b82f6;
+            --amber: #f59e0b;
+            --text: #f1f5f9;
+            --muted: #64748b;
+            --mono: 'JetBrains Mono', monospace;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ====== LOGIN PAGE ====== */
+        #login-page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(ellipse at 30% 20%, rgba(239, 68, 68, 0.12) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 80%, rgba(59, 130, 246, 0.08) 0%, transparent 60%),
+                var(--bg);
+        }
+
+        .login-card {
+            width: 400px;
+            background: rgba(13, 19, 33, 0.9);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+        }
+
+        .login-logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .login-logo .icon {
+            width: 72px;
+            height: 72px;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.05));
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            margin-bottom: 16px;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.2);
+        }
+
+        .login-logo h1 {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .login-logo h1 span {
+            color: var(--red);
+        }
+
+        .login-logo p {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 8px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 13px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1.5px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            color: var(--text);
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-group input:focus {
+            border-color: var(--red);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: white;
+            font-size: 15px;
+            font-weight: 700;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            letter-spacing: 0.04em;
+            margin-top: 8px;
+            box-shadow: 0 8px 24px rgba(239, 68, 68, 0.35);
+            transition: all 0.2s;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 32px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .login-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 10px;
+            padding: 10px 14px;
+            color: #fca5a5;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .demo-hint {
+            margin-top: 20px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .demo-hint p {
+            color: var(--muted);
+            font-size: 11px;
+            font-family: var(--mono);
+        }
+
+        .demo-hint span {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* ====== DASHBOARD ====== */
+        #dashboard {
+            display: none;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            height: 60px;
+            background: rgba(13, 19, 33, 0.95);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .topbar-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .topbar-logo span {
+            font-size: 18px;
+        }
+
+        .topbar-logo h1 {
+            font-size: 17px;
+            font-weight: 800;
+        }
+
+        .topbar-logo h1 em {
+            color: var(--red);
+            font-style: normal;
+        }
+
+        .topbar-logo small {
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            display: block;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .live-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.25);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--green);
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse-live 1.5s infinite;
+        }
+
+        @keyframes pulse-live {
+
+            0%,
+            100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+            }
+
+            50% {
+                box-shadow: 0 0 0 5px transparent;
+                opacity: 0.8;
+            }
+        }
+
+        .doctor-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .doctor-avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--red), #7c3aed);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .doctor-info p {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .doctor-info small {
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .btn-logout {
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: var(--red);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-logout:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .dashboard-body {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px 24px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-header h2 {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .card-header .tag {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* Map */
+        #map {
+            width: 100%;
+            height: 490px;
+            border-radius: 0 0 18px 18px;
+        }
+
+        /* Status panel */
+        #no-patients {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+            gap: 12px;
+        }
+
+        #no-patients .idle-icon {
+            font-size: 52px;
+            opacity: 0.3;
+        }
+
+        #no-patients p {
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        #patient-card {
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .alert-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .alert-banner .pulse-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--red);
+            animation: pulse-live 1s infinite;
+            flex-shrink: 0;
+        }
+
+        .alert-banner strong {
+            font-size: 15px;
+            color: #fca5a5;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .info-item {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 14px;
+        }
+
+        .info-item .label {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 4px;
+        }
+
+        .info-item .value {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .info-item .value.red {
+            color: #fca5a5;
+        }
+
+        .info-item .value.amber {
+            color: #fcd34d;
+        }
+
+        .triage-box {
+            background: #020409;
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .triage-box .triage-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--red);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 8px;
+        }
+
+        .triage-box pre {
+            font-family: var(--mono);
+            font-size: 13px;
+            color: #d4d4d4;
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+
+        .btn-acknowledge {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            letter-spacing: 0.05em;
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+            transition: all 0.2s;
+        }
+
+        .btn-acknowledge:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 28px rgba(37, 99, 235, 0.4);
+        }
+
+        .card.incoming {
+            border-color: rgba(239, 68, 68, 0.5);
+            box-shadow: 0 0 40px rgba(239, 68, 68, 0.12);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ======== LOGIN PAGE ======== -->
+    <div id="login-page">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="icon">🏥</div>
+                <h1>Life<span>Link</span></h1>
+                <p>Emergency Response · Doctor Portal</p>
+            </div>
+
+            <div class="login-error" id="login-error">Invalid credentials. Please try again.</div>
+
+            <div class="form-group">
+                <label>Doctor ID</label>
+                <input type="text" id="doctor-id" placeholder="e.g. DR-001" autocomplete="off"
+                    onkeydown="if(event.key==='Enter')doLogin()">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="doctor-pass" placeholder="••••••••"
+                    onkeydown="if(event.key==='Enter')doLogin()">
+            </div>
+
+            <button class="btn-login" onclick="doLogin()" id="login-btn">LOGIN TO ER PORTAL</button>
+
+            <div class="demo-hint">
+                <p><span>Demo →</span> ID: DR-001 · Password: erteam123</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======== DASHBOARD ======== -->
+    <div id="dashboard">
+
+        <!-- Top Bar -->
+        <div class="topbar">
+            <div class="topbar-logo">
+                <span>🚨</span>
+                <div>
+                    <h1>Life<em>Link</em> ER</h1>
+                    <small>KEM Hospital, Mumbai</small>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="live-pill"><span class="live-dot"></span>Live</div>
+                <div class="doctor-badge">
+                    <div class="doctor-avatar">👨‍⚕️</div>
+                    <div class="doctor-info">
+                        <p id="doctor-name-display">Dr. —</p>
+                        <small>Emergency Medicine</small>
+                    </div>
+                </div>
+                <button class="btn-logout" onclick="doLogout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="dashboard-body">
+
+            <!-- LEFT: Map -->
+            <div class="card">
+                <div class="card-header">
+                    <span>🛰️</span>
+                    <h2>Live Green Corridor</h2>
+                    <span class="tag" style="background:rgba(34,197,94,0.1);color:#4ade80;">Mumbai</span>
+                </div>
+                <div id="map"></div>
+            </div>
+
+            <!-- RIGHT: Patient Info -->
+            <div class="card" id="patient-panel">
+                <div class="card-header">
+                    <span>🏥</span>
+                    <h2>Incoming Patient</h2>
+                    <span class="tag" id="status-tag"
+                        style="background:rgba(100,116,139,0.15);color:#94a3b8;">Standby</span>
+                </div>
+                <div class="card-body">
+
+                    <!-- IDLE STATE -->
+                    <div id="no-patients">
+                        <div class="idle-icon">🩺</div>
+                        <p>No incoming trauma patients.</p>
+                        <p style="font-size:12px;color:#475569;">Monitoring ambulance dispatch...</p>
+                    </div>
+
+                    <!-- ACTIVE PATIENT -->
+                    <div id="patient-card">
+                        <div class="alert-banner">
+                            <span class="pulse-dot"></span>
+                            <strong>⚠️ INCOMING TRAUMA — Prepare Bay</strong>
+                        </div>
+
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="label">Patient Name</div>
+                                <div class="value" id="patient-name">—</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label">Blood Group</div>
+                                <div class="value red" id="blood-group">—</div>
+                            </div>
+                            <div class="info-item" style="grid-column:1/-1">
+                                <div class="label">Known Allergies</div>
+                                <div class="value amber" id="allergies" style="font-size:15px;">—</div>
+                            </div>
+                        </div>
+
+                        <div class="triage-box">
+                            <div class="triage-label">🤖 AI Triage Summary</div>
+                            <pre id="triage-summary">Waiting for paramedic scan...</pre>
+                        </div>
+
+                        <button class="btn-acknowledge" onclick="acknowledgePatient()">✅ ACKNOWLEDGE & CLEAR
+                            BAY</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // ======== CREDENTIALS ========
+        const DOCTORS = {
+            'DR-001': { password: 'erteam123', name: 'Dr. Arjun Mehta' },
+            'DR-002': { password: 'erteam123', name: 'Dr. Sanya Roy' },
+            'DR-003': { password: 'erteam123', name: 'Dr. Vikram Nair' },
+        };
+
+        function doLogin() {
+            const id = document.getElementById('doctor-id').value.trim().toUpperCase();
+            const pass = document.getElementById('doctor-pass').value;
+            const doc = DOCTORS[id];
+            const errEl = document.getElementById('login-error');
+            if (doc && doc.password === pass) {
+                errEl.style.display = 'none';
+                document.getElementById('login-page').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'flex';
+                document.getElementById('doctor-name-display').textContent = doc.name;
+                initMap();
+                setInterval(fetchIncomingPatients, 1000);
+            } else {
+                errEl.style.display = 'block';
+                document.getElementById('doctor-id').value = '';
+                document.getElementById('doctor-pass').value = '';
+            }
+        }
+
+        function doLogout() {
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('login-page').style.display = 'flex';
+            document.getElementById('doctor-id').value = '';
+            document.getElementById('doctor-pass').value = '';
+            // Reset patient panel
+            document.getElementById('no-patients').style.display = 'flex';
+            document.getElementById('patient-card').style.display = 'none';
+            document.getElementById('patient-panel').classList.remove('incoming');
+            document.getElementById('status-tag').textContent = 'Standby';
+            document.getElementById('status-tag').style.color = '#94a3b8';
+            document.getElementById('status-tag').style.background = 'rgba(100,116,139,0.15)';
+        }
+
+        // ======== MAP (Mumbai) ========
+        var map, ambulanceMarker, trafficLightMarkers = {};
+
+        function initMap() {
+            map = L.map('map').setView([19.0090, 72.8455], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: 'LifeLink'
+            }).addTo(map);
+
+            // Hospital: KEM Hospital, Parel
+            var hospIcon = L.divIcon({ className: '', html: '<div style="font-size:26px">🏥</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
+            L.marker([19.0002, 72.8432], { icon: hospIcon }).addTo(map).bindPopup('KEM Hospital, Parel');
+
+            // Crash site: Dadar
+            L.circleMarker([19.0178, 72.8478], { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.8, radius: 10 })
+                .addTo(map).bindPopup('🚨 Crash Site — Dadar');
+        }
+
+        // ======== PATIENT POLLING ========
+        async function fetchIncomingPatients() {
+            try {
+                const res = await fetch('/api/er-updates');
+                const data = await res.json();
+
+                if (data.status === 'incoming') {
+                    document.getElementById('no-patients').style.display = 'none';
+                    document.getElementById('patient-card').style.display = 'flex';
+                    document.getElementById('patient-panel').classList.add('incoming');
+                    document.getElementById('status-tag').textContent = 'INCOMING';
+                    document.getElementById('status-tag').style.background = 'rgba(239,68,68,0.15)';
+                    document.getElementById('status-tag').style.color = '#fca5a5';
+
+                    if (data.patient) {
+                        document.getElementById('patient-name').textContent = data.patient.name || '—';
+                        document.getElementById('blood-group').textContent = data.patient.blood_group || '—';
+                        document.getElementById('allergies').textContent = data.patient.allergies || 'None known';
+                        document.getElementById('triage-summary').textContent = data.ai_summary || 'Awaiting paramedic scan...';
+                    }
+
+                    if (data.amb_lat && data.amb_lat !== 0) {
+                        var ambIcon = L.divIcon({ className: '', html: '<div style="font-size:28px">🚑</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
+                        if (!ambulanceMarker) {
+                            ambulanceMarker = L.marker([data.amb_lat, data.amb_lon], { icon: ambIcon }).addTo(map);
+                        } else {
+                            ambulanceMarker.setLatLng([data.amb_lat, data.amb_lon]);
+                        }
+                        map.panTo([data.amb_lat, data.amb_lon]);
+                    }
+
+                    // Traffic lights
+                    if (data.lights) {
+                        for (const [id, light] of Object.entries(data.lights)) {
+                            const color = light.status === 'GREEN' ? '#22c55e' : '#ef4444';
+                            if (!trafficLightMarkers[id]) {
+                                trafficLightMarkers[id] = L.circleMarker([light.lat, light.lon], { color, fillColor: color, fillOpacity: 1, radius: 8 }).addTo(map);
+                            } else {
+                                trafficLightMarkers[id].setStyle({ color, fillColor: color });
+                            }
+                        }
+                    }
+                }
+            } catch (e) { }
+        }
+
+        async function acknowledgePatient() {
+            await fetch('/api/clear-er', { method: 'POST' });
+            document.getElementById('patient-card').style.display = 'none';
+            document.getElementById('no-patients').style.display = 'flex';
+            document.getElementById('patient-panel').classList.remove('incoming');
+            document.getElementById('status-tag').textContent = 'Standby';
+            document.getElementById('status-tag').style.color = '#94a3b8';
+            document.getElementById('status-tag').style.background = 'rgba(100,116,139,0.15)';
+            document.getElementById('triage-summary').textContent = 'Waiting for paramedic scan...';
+            if (ambulanceMarker) { map.removeLayer(ambulanceMarker); ambulanceMarker = null; }
+        }
+        
+    </script>
+</body>
+
+</html>
