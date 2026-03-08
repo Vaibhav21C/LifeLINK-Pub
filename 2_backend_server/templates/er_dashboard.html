@@ -566,7 +566,52 @@
                 <button class="btn-logout" onclick="doLogout()">Logout</button>
             </div>
         </div>
+        <button id="judgeDemoBtn" style="background-color: #ff0000; color: white; padding: 15px 30px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px;">
+  🚨 Judge Demo: Simulate Edge AI Crash
+</button>
 
+<script>
+document.getElementById('judgeDemoBtn').addEventListener('click', function() {
+    const btn = this;
+    
+    // 1. Change button to show it is thinking
+    btn.innerText = "⏳ Simulating Crash Detection...";
+    btn.style.backgroundColor = "#ffaa00";
+
+    // 2. Fire the fake webhook to your live AWS server
+    fetch('http://98.82.131.184:8000/api/trigger', { // Double check this matches your FastAPI route!
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            incident_id: "CRASH-DEMO-991",
+            location: "22.6116, 77.7810", // Hardcoded GPS for the demo
+            severity: "HIGH"
+        })
+    })
+    .then(response => {
+        if(response.ok) {
+            // 3. Success! The backend accepted it.
+            btn.innerText = "✅ Crash Triggered! Check Paramedic App.";
+            btn.style.backgroundColor = "#00cc00";
+            
+            // Reset button after 4 seconds so they can press it again
+            setTimeout(() => {
+                btn.innerText = "🚨 Judge Demo: Simulate Edge AI Crash";
+                btn.style.backgroundColor = "#ff0000";
+            }, 4000);
+        } else {
+            throw new Error('Backend responded with an error');
+        }
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+        btn.innerText = "❌ Connection Error (Check AWS)";
+        btn.style.backgroundColor = "#cc0000";
+    });
+});
+</script>
         <!-- Body -->
         <div class="dashboard-body">
 

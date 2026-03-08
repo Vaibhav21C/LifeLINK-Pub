@@ -2,7 +2,7 @@ import requests
 
 # The local URL of your FastAPI orchestration server
 # (If you deploy the server to AWS/Render later, you just change this one line!)
-SERVER_URL = "http://127.0.0.1:8000/api/trigger"
+SERVER_URL = "http://98.82.131.184:8000/api/trigger"
 
 def fire_trigger(incident_id, location, severity, patient_id="PENDING"):
     """
