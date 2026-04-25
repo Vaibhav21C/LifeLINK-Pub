@@ -63,6 +63,8 @@ const glass = {
     boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
 };
 
+
+
 /* ============ MAIN COMPONENT ============ */
 export default function TrackingView({ incidentPos, onBack }) {
     const [phase, setPhase] = useState('finding');
@@ -87,6 +89,7 @@ export default function TrackingView({ incidentPos, onBack }) {
     const [timeSaved, setTimeSaved] = useState(0);
     const [distToNextTurn, setDistToNextTurn] = useState(0);
 
+
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
     const markerRef = useRef(null);
@@ -95,10 +98,12 @@ export default function TrackingView({ incidentPos, onBack }) {
     const minimapMarkerRef = useRef(null);
     const animFrameRef = useRef(null);
     const simStartRef = useRef(null);
+    const autoStartTimerRef = useRef(null);
 
-    // ---- Init: find hospitals + route ----
+    // ---- Init: find hospitals + route from crash site → nearest hospital ----
     useEffect(() => {
         if (!incidentPos) return;
+
         (async () => {
             try {
                 const hospData = await fetchHospitals(incidentPos.lat, incidentPos.lng);
@@ -107,6 +112,7 @@ export default function TrackingView({ incidentPos, onBack }) {
                 if (!hosp.length) return;
                 const best = hosp[0];
                 setSelectedHospital(best);
+                // Route from crash site → nearest hospital
                 const [routeResp, altResp] = await Promise.all([
                     fetchRoute(incidentPos.lat, incidentPos.lng, best.lat, best.lng),
                     fetchAlternativeRoutes(incidentPos.lat, incidentPos.lng, best.lat, best.lng).catch(() => ({ routes: [] })),
@@ -134,6 +140,7 @@ export default function TrackingView({ incidentPos, onBack }) {
             setAltRoutes(altResp.routes || []);
         } catch (e) { console.error(e); }
     }, [incidentPos, selectedHospital]);
+
 
     const activeRoute = altRoutes[selectedRouteIdx];
     const adjustedDuration = activeRoute?.adjusted_duration_s || routeData?.traffic_route?.adjusted_duration_s || 0;
@@ -258,10 +265,31 @@ export default function TrackingView({ incidentPos, onBack }) {
             speed_limit_kmh: s.speed_limit_kmh || null,
         })) || [];
         if (!routeGeom?.coordinates) return;
-        const coords = routeGeom.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+        
+        // Convert to array of {lat, lng} for simulation
+        let fullCoords = routeGeom.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+        
+        // Trim the end of the route (keep ambulance slightly away from hospital)
+        // Mercator coordinate math approximation for ~50-100m depending on segment density
+        let trimCount = Math.min(Math.floor(fullCoords.length * 0.05), 10); // Remove last 5-10 points max
+        trimCount = Math.max(trimCount, 2); // Always remove at least a little bit
+        const coords = fullCoords.slice(0, fullCoords.length - trimCount);
 
         // Build route GeoJSON for map
         const routeGeoJSON = { type: 'Feature', geometry: routeGeom, properties: {} };
+
+        // --- SYNC ROUTE WITH ER DASHBOARD ---
+        fetch('/api/sync-route', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                incident_id: "CRASH-991", // Demo fixed ID
+                hospital_name: selectedHospital.name,
+                hosp_lat: selectedHospital.lat,
+                hosp_lng: selectedHospital.lng,
+                route_geometry: fullCoords.map(c => [c.lng, c.lat]) // Send GeoJSON format
+            })
+        }).catch(e => console.error("Failed to sync route:", e));
 
         // Bearings
         const bearings = [];
@@ -369,6 +397,21 @@ export default function TrackingView({ incidentPos, onBack }) {
                 });
             }
 
+            // --- SEND REAL-TIME LOCATION TO BACKEND FOR ER DASHBOARD ---
+            // Throttle to roughly once every 2 seconds (assuming 60fps animate calls, ~120 frames)
+            if (!window._lastLocationUpdate || elapsed - window._lastLocationUpdate > 2000) {
+                window._lastLocationUpdate = elapsed;
+                fetch('/api/update-ambulance-location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        incident_id: "CRASH-991", // Assuming fixed for this demo
+                        lat: lat,
+                        lng: lng
+                    })
+                }).catch(e => console.error("Failed to update ER dashboard:", e));
+            }
+
             // Direction
             setCurrentTurn({ text: `Head ${getCardinal(bearing)}`, arrow: '↑' });
             if (segIdx + 1 < bearings.length) setNextTurn(getTurnDirection(bearing, bearings[segIdx + 1]));
@@ -402,6 +445,19 @@ export default function TrackingView({ incidentPos, onBack }) {
         });
     }, [activeRoute, routeData, adjustedDuration, navSteps, initMap, autoFollow]);
 
+    // ---- AUTO-START: After route is ready, auto-start navigation after 2s ----
+    useEffect(() => {
+        if (phase === 'ready' && selectedHospital && routeData) {
+            autoStartTimerRef.current = setTimeout(() => {
+                handleStart();
+            }, 2000); // Show route overview for 2 seconds, then auto-start
+        }
+        return () => {
+            if (autoStartTimerRef.current) clearTimeout(autoStartTimerRef.current);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [phase, selectedHospital, routeData, handleStart]);
+
     const handleStop = useCallback(() => {
         if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
         if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
@@ -418,6 +474,7 @@ export default function TrackingView({ incidentPos, onBack }) {
         if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
         if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
         if (minimapRef.current) { minimapRef.current.remove(); minimapRef.current = null; }
+        if (autoStartTimerRef.current) clearTimeout(autoStartTimerRef.current);
     }, []);
 
     /* ============ RENDER ============ */
@@ -463,7 +520,7 @@ export default function TrackingView({ incidentPos, onBack }) {
                         {/* Selected route with full traffic colors */}
                         {tppSegments.map((seg, i) => <Polyline key={`main-${i}`} positions={seg.positions} pathOptions={{ color: seg.color, weight: 7, opacity: 0.9 }} />)}
                         {/* Markers */}
-                        <Marker position={[incidentPos.lat, incidentPos.lng]} icon={createIcon('📍', 36)} />
+                        <Marker position={[incidentPos.lat, incidentPos.lng]} icon={createIcon('🚑', 36)} />
                         <Marker position={[selectedHospital.lat, selectedHospital.lng]} icon={createIcon('🏥', 36)} />
                     </MapContainer>
 
@@ -570,7 +627,7 @@ export default function TrackingView({ incidentPos, onBack }) {
                                     ))}
                                 </div>
                             </div>
-                            <button onClick={handleStart} className="btn-primary w-full justify-center py-3 text-base rounded-2xl">🚀 Start Navigation</button>
+                            <button onClick={handleStart} className="btn-primary w-full justify-center py-3 text-base rounded-2xl" style={{ opacity: 0.7, pointerEvents: 'none' }}>⏱️ Auto-launching navigation...</button>
                             <button onClick={onBack} className="w-full text-center text-xs mt-2 cursor-pointer" style={{ color: '#94a3b8', background: 'none', border: 'none' }}>← Go back</button>
                         </div>
                     </div>

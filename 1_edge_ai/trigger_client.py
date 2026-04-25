@@ -2,7 +2,7 @@ import requests
 
 # The local URL of your FastAPI orchestration server
 # (If you deploy the server to AWS/Render later, you just change this one line!)
-SERVER_URL = "http://98.82.131.184:8000/api/trigger"
+SERVER_URL = "http://127.0.0.1:8000/api/trigger"
 
 def fire_trigger(incident_id, location, severity, patient_id="PENDING"):
     """
@@ -22,7 +22,7 @@ def fire_trigger(incident_id, location, severity, patient_id="PENDING"):
         response = requests.post(SERVER_URL, json=payload, timeout=3)
         
         if response.status_code == 200:
-            print(f"✅ Webhook Fired Successfully! Server says: {response.json().get('message')}")
+            print(f"✅ Webhook Fired Successfully! Server says: {response.json()}")
             return True
         else:
             print(f"⚠️ Webhook reached server, but got error code: {response.status_code}")
@@ -34,3 +34,4 @@ def fire_trigger(incident_id, location, severity, patient_id="PENDING"):
     except requests.exceptions.Timeout:
         print("❌ Webhook Failed: Server took too long to respond (Timeout).")
         return False
+        

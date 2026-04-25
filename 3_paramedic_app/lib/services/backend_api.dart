@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class BackendApi {
   // Change this IP if running on a physical device on your local network
-  static const String serverUrl = "http://98.82.131.184:8000";
+  static const String serverUrl = "http://127.0.0.1:8000";
 
   /// Sends paramedic GPS + ID to the backend every 5 seconds while patrolling
   static Future<void> sendHeartbeat(

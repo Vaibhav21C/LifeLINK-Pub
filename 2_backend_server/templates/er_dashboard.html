@@ -374,6 +374,29 @@
             border-radius: 0 0 18px 18px;
         }
 
+        /* Green corridor legend */
+        .corridor-legend {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.3);
+            border-top: 1px solid var(--border);
+        }
+        .corridor-legend .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--muted);
+        }
+        .corridor-legend .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
         /* Status panel */
         #no-patients {
             display: flex;
@@ -507,6 +530,11 @@
             border-color: rgba(239, 68, 68, 0.5);
             box-shadow: 0 0 40px rgba(239, 68, 68, 0.12);
         }
+
+        @keyframes ambulance-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+            50% { box-shadow: 0 0 0 12px transparent; }
+        }
     </style>
 </head>
 
@@ -566,53 +594,7 @@
                 <button class="btn-logout" onclick="doLogout()">Logout</button>
             </div>
         </div>
-        <button id="judgeDemoBtn" style="background-color: #ff0000; color: white; padding: 15px 30px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px;">
-  🚨 Judge Demo: Simulate Edge AI Crash
-</button>
 
-<script>
-document.getElementById('judgeDemoBtn').addEventListener('click', function() {
-    const btn = this;
-    
-    // 1. Change button to show it is thinking
-    btn.innerText = "⏳ Simulating Crash Detection...";
-    btn.style.backgroundColor = "#ffaa00";
-
-    // 2. Fire the fake webhook to your live AWS server
-    fetch('http://98.82.131.184:8000/api/trigger', { // Double check this matches your FastAPI route!
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            incident_id: "CRASH-DEMO-991",
-            gps_location: "22.6116, 77.7810", // Changed from 'location'
-            severity: "HIGH",
-            patient_id: "PATIENT-001"         // Added to satisfy FastAPI
-        })
-    })
-    .then(response => {
-        if(response.ok) {
-            // 3. Success! The backend accepted it.
-            btn.innerText = "✅ Crash Triggered! Check Paramedic App.";
-            btn.style.backgroundColor = "#00cc00";
-            
-            // Reset button after 4 seconds so they can press it again
-            setTimeout(() => {
-                btn.innerText = "🚨 Judge Demo: Simulate Edge AI Crash";
-                btn.style.backgroundColor = "#ff0000";
-            }, 4000);
-        } else {
-            throw new Error('Backend responded with an error');
-        }
-    })
-    .catch((error) => {
-        console.error('Error:', error);
-        btn.innerText = "❌ Connection Error (Check AWS)";
-        btn.style.backgroundColor = "#cc0000";
-    });
-});
-</script>
         <!-- Body -->
         <div class="dashboard-body">
 
@@ -621,9 +603,15 @@ document.getElementById('judgeDemoBtn').addEventListener('click', function() {
                 <div class="card-header">
                     <span>🛰️</span>
                     <h2>Live Green Corridor</h2>
-                    <span class="tag" style="background:rgba(34,197,94,0.1);color:#4ade80;">Mumbai</span>
+                    <span class="tag" style="background:rgba(34,197,94,0.1);color:#4ade80;">Active</span>
                 </div>
                 <div id="map"></div>
+                <div class="corridor-legend">
+                    <div class="legend-item"><div class="legend-dot" style="background:#22c55e;"></div> Cleared (Green)</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#3b82f6;"></div> Route Ahead</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#ef4444;"></div> Signal RED</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#22c55e; border: 2px solid #166534;"></div> Signal GREEN</div>
+                </div>
             </div>
 
             <!-- RIGHT: Patient Info -->
@@ -720,22 +708,21 @@ document.getElementById('judgeDemoBtn').addEventListener('click', function() {
             document.getElementById('status-tag').style.background = 'rgba(100,116,139,0.15)';
         }
 
-        // ======== MAP (Mumbai) ========
-        var map, ambulanceMarker, trafficLightMarkers = {};
+        // ======== MAP (Dynamic Integration) ========
+        var map, ambulanceMarker, hospitalMarker, crashMarker;
+        var routeLineFull = null;      // Full route polyline (blue, behind)
+        var routeLineCleared = null;   // Cleared portion (green, on top)
+        var trafficLightMarkers = {};
+        var lastRouteLatLngs = null;   // Store route coords for green corridor effect
+        var hasSetBounds = false;      // Only fit bounds once
+        var ambulanceTrail = null;     // Polyline showing ambulance trail
 
         function initMap() {
-            map = L.map('map').setView([19.0090, 72.8455], 13);
+            // Initialize with a default view (will be updated dynamically)
+            map = L.map('map').setView([20.5937, 78.9629], 5); // Default to India center
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: 'LifeLink'
             }).addTo(map);
-
-            // Hospital: KEM Hospital, Parel
-            var hospIcon = L.divIcon({ className: '', html: '<div style="font-size:26px">🏥</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
-            L.marker([19.0002, 72.8432], { icon: hospIcon }).addTo(map).bindPopup('KEM Hospital, Parel');
-
-            // Crash site: Dadar
-            L.circleMarker([19.0178, 72.8478], { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.8, radius: 10 })
-                .addTo(map).bindPopup('🚨 Crash Site — Dadar');
         }
 
         // ======== PATIENT POLLING ========
@@ -759,24 +746,145 @@ document.getElementById('judgeDemoBtn').addEventListener('click', function() {
                         document.getElementById('triage-summary').textContent = data.ai_summary || 'Awaiting paramedic scan...';
                     }
 
+                    // ── Draw the full route (blue) ──
+                    if (data.route && data.route.length > 0 && !routeLineFull) {
+                        lastRouteLatLngs = data.route.map(coord => [coord[1], coord[0]]); // [lng,lat] → [lat,lng]
+                        
+                        // Full route as blue dashed line (background)
+                        routeLineFull = L.polyline(lastRouteLatLngs, {
+                            color: '#3b82f6',
+                            weight: 5,
+                            opacity: 0.5,
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                            dashArray: '8 6'
+                        }).addTo(map);
+
+                        // Cleared route (green, will be updated as ambulance progresses)
+                        routeLineCleared = L.polyline([], {
+                            color: '#22c55e',
+                            weight: 7,
+                            opacity: 0.85,
+                            lineCap: 'round',
+                            lineJoin: 'round'
+                        }).addTo(map);
+                    }
+
+                    // ── Draw Hospital Marker ──
+                    if (data.hospital && data.hospital.lat) {
+                        if (!hospitalMarker) {
+                            var hospIcon = L.divIcon({
+                                className: '',
+                                html: '<div style="font-size:28px; filter:drop-shadow(0 0 8px #22c55e); text-align:center;">🏥</div>',
+                                iconSize: [30, 30],
+                                iconAnchor: [15, 15]
+                            });
+                            hospitalMarker = L.marker([data.hospital.lat, data.hospital.lng], { icon: hospIcon })
+                                .addTo(map)
+                                .bindPopup('<b>' + data.hospital.name + '</b><br>Destination Hospital');
+                        }
+                    }
+
+                    // ── Draw Crash Marker ──
+                    if (data.crash_lat && data.crash_lat !== 0) {
+                        if (!crashMarker) {
+                            crashMarker = L.circleMarker([data.crash_lat, data.crash_lon], {
+                                color: '#ef4444',
+                                fillColor: '#ef4444',
+                                fillOpacity: 0.8,
+                                radius: 10,
+                                weight: 2
+                            }).addTo(map).bindPopup('🚨 Crash Site');
+                            
+                            // Add pulsating ring around crash site
+                            L.circleMarker([data.crash_lat, data.crash_lon], {
+                                color: '#ef4444',
+                                fillColor: 'transparent',
+                                fillOpacity: 0,
+                                radius: 18,
+                                weight: 1.5,
+                                opacity: 0.4,
+                                dashArray: '4 4'
+                            }).addTo(map);
+                        }
+                    }
+
+                    // ── Fit map to show full route on first data ──
+                    if (!hasSetBounds && data.route && data.route.length > 0) {
+                        var bounds = L.latLngBounds(lastRouteLatLngs);
+                        if (data.crash_lat && data.crash_lat !== 0) {
+                            bounds.extend([data.crash_lat, data.crash_lon]);
+                        }
+                        if (data.hospital && data.hospital.lat) {
+                            bounds.extend([data.hospital.lat, data.hospital.lng]);
+                        }
+                        map.fitBounds(bounds, { padding: [40, 40] });
+                        hasSetBounds = true;
+                    }
+
+                    // ── Update Ambulance Marker ──
                     if (data.amb_lat && data.amb_lat !== 0) {
-                        var ambIcon = L.divIcon({ className: '', html: '<div style="font-size:28px">🚑</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
+                        var ambIcon = L.divIcon({
+                            className: '',
+                            html: '<div style="font-size:28px; filter:drop-shadow(0 0 8px rgba(239,68,68,0.6)); animation: ambulance-pulse 1.5s infinite;">🚑</div>',
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 15]
+                        });
                         if (!ambulanceMarker) {
-                            ambulanceMarker = L.marker([data.amb_lat, data.amb_lon], { icon: ambIcon }).addTo(map);
+                            ambulanceMarker = L.marker([data.amb_lat, data.amb_lon], { icon: ambIcon, zIndexOffset: 1000 }).addTo(map);
                         } else {
                             ambulanceMarker.setLatLng([data.amb_lat, data.amb_lon]);
                         }
-                        map.panTo([data.amb_lat, data.amb_lon]);
+
+                        // ── Update Green Corridor effect ──
+                        // Find the closest point on the route to the ambulance position
+                        if (lastRouteLatLngs && routeLineCleared) {
+                            var ambPos = L.latLng(data.amb_lat, data.amb_lon);
+                            var closestIdx = 0;
+                            var closestDist = Infinity;
+                            for (var i = 0; i < lastRouteLatLngs.length; i++) {
+                                var d = ambPos.distanceTo(L.latLng(lastRouteLatLngs[i][0], lastRouteLatLngs[i][1]));
+                                if (d < closestDist) {
+                                    closestDist = d;
+                                    closestIdx = i;
+                                }
+                            }
+                            // Green portion = start → ambulance position
+                            var clearedCoords = lastRouteLatLngs.slice(0, closestIdx + 1);
+                            clearedCoords.push([data.amb_lat, data.amb_lon]);
+                            routeLineCleared.setLatLngs(clearedCoords);
+                        }
                     }
 
-                    // Traffic lights
+                    // ── Traffic lights along route ──
                     if (data.lights) {
                         for (const [id, light] of Object.entries(data.lights)) {
-                            const color = light.status === 'GREEN' ? '#22c55e' : '#ef4444';
+                            var isGreen = light.status === 'GREEN';
+                            var color = isGreen ? '#22c55e' : '#ef4444';
+                            var glowColor = isGreen ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)';
+                            var labelText = light.name + ' — ' + light.status;
+                            
                             if (!trafficLightMarkers[id]) {
-                                trafficLightMarkers[id] = L.circleMarker([light.lat, light.lon], { color, fillColor: color, fillOpacity: 1, radius: 8 }).addTo(map);
+                                // Create a custom traffic light icon
+                                var tlIcon = L.divIcon({
+                                    className: '',
+                                    html: '<div style="width:16px; height:16px; border-radius:50%; background:' + color + '; border:2px solid rgba(255,255,255,0.3); box-shadow: 0 0 10px ' + glowColor + ';"></div>',
+                                    iconSize: [16, 16],
+                                    iconAnchor: [8, 8]
+                                });
+                                trafficLightMarkers[id] = L.marker([light.lat, light.lon], { icon: tlIcon, zIndexOffset: 500 })
+                                    .addTo(map)
+                                    .bindTooltip(labelText, { permanent: false, direction: 'top', offset: [0, -10] });
                             } else {
-                                trafficLightMarkers[id].setStyle({ color, fillColor: color });
+                                // Update the icon color
+                                var updatedIcon = L.divIcon({
+                                    className: '',
+                                    html: '<div style="width:16px; height:16px; border-radius:50%; background:' + color + '; border:2px solid rgba(255,255,255,0.3); box-shadow: 0 0 10px ' + glowColor + '; transition: all 0.5s;"></div>',
+                                    iconSize: [16, 16],
+                                    iconAnchor: [8, 8]
+                                });
+                                trafficLightMarkers[id].setIcon(updatedIcon);
+                                trafficLightMarkers[id].setTooltipContent(labelText);
                             }
                         }
                     }
@@ -793,7 +901,20 @@ document.getElementById('judgeDemoBtn').addEventListener('click', function() {
             document.getElementById('status-tag').style.color = '#94a3b8';
             document.getElementById('status-tag').style.background = 'rgba(100,116,139,0.15)';
             document.getElementById('triage-summary').textContent = 'Waiting for paramedic scan...';
+            
+            // Clear all map layers
             if (ambulanceMarker) { map.removeLayer(ambulanceMarker); ambulanceMarker = null; }
+            if (hospitalMarker) { map.removeLayer(hospitalMarker); hospitalMarker = null; }
+            if (crashMarker) { map.removeLayer(crashMarker); crashMarker = null; }
+            if (routeLineFull) { map.removeLayer(routeLineFull); routeLineFull = null; }
+            if (routeLineCleared) { map.removeLayer(routeLineCleared); routeLineCleared = null; }
+            if (ambulanceTrail) { map.removeLayer(ambulanceTrail); ambulanceTrail = null; }
+            for (let id in trafficLightMarkers) { map.removeLayer(trafficLightMarkers[id]); }
+            trafficLightMarkers = {};
+            lastRouteLatLngs = null;
+            hasSetBounds = false;
+            
+            map.setView([20.5937, 78.9629], 5); // Reset to default view
         }
         
     </script>

@@ -2,8 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/backend_api.dart';
 import 'login_page.dart';
+
+/// URL of the ambulance tracking web app (change if deployed remotely)
+const String _trackingAppBaseUrl = 'http://localhost:5173';
 
 class ParamedicDashboard extends StatefulWidget {
   final String paramedicName;
@@ -17,6 +21,7 @@ class _ParamedicDashboardState extends State<ParamedicDashboard> {
   bool isPatrolling = true;
   bool isDispatched = false;
   bool isScanning = false;
+  bool scanDone = false;         // ← true once triage summary loads
   String triageSummary = "Awaiting patient scan...";
   String currentIncidentId = "";
   LatLng? crashLocation; // Parsed from the dispatch response
@@ -31,24 +36,13 @@ class _ParamedicDashboardState extends State<ParamedicDashboard> {
   late double patrolLat;
   late double patrolLon;
 
-  // Road-following route from crash to hospital
-  final List<LatLng> greenCorridorRoute = [
-    const LatLng(19.0178, 72.8478), // Start (Crash — Dadar, Mumbai)
-    const LatLng(19.0155, 72.8470), // Heading south on LJ Marg...
-    const LatLng(19.0130, 72.8460),
-    const LatLng(19.0105, 72.8452), // Passing Matunga...
-    const LatLng(19.0080, 72.8445),
-    const LatLng(19.0055, 72.8440), // Approaching Parel...
-    const LatLng(19.0030, 72.8436),
-    const LatLng(19.0010, 72.8434), // Turning into hospital lane...
-    const LatLng(19.0005, 72.8433),
-    const LatLng(19.0002, 72.8432), // Arrived at KEM Hospital!
-  ];
+  // Road-following route — generated dynamically from crashLocation when dispatch is accepted
+  List<LatLng> greenCorridorRoute = [];
 
-  double currentLat = 19.0178;
-  double currentLon = 72.8478;
-  final double destLat = 19.0002;
-  final double destLon = 72.8432;
+  double currentLat = 22.6500;   // Will be overwritten from crashLocation
+  double currentLon = 77.7400;
+  double destLat    = 22.6500;   // Will be overwritten from crashLocation
+  double destLon    = 77.7400;
 
   /// Extract the paramedic ID from the name (e.g. "Rahul Sharma" → "PMD-001")
   /// In a real app this would come from auth. Here we derive a stable mock ID.
@@ -68,13 +62,14 @@ class _ParamedicDashboardState extends State<ParamedicDashboard> {
     // Give each paramedic a slightly different starting patrol position
     // so the nearest-paramedic logic actually works
     final offsets = {
-      'PMD-001': [0.000, 0.000], // Closest to the crash area
-      'PMD-002': [0.020, 0.015], // ~2.5km away
-      'PMD-003': [0.045, 0.030], // ~5.5km away
+      'PMD-001': [0.000, 0.000], // ~5km from crash area — nearest
+      'PMD-002': [0.015, -0.010], // ~6.5km from crash area
+      'PMD-003': [0.030, -0.020], // ~8km from crash area
     };
     final offset = offsets[paramedicId] ?? [0.0, 0.0];
-    patrolLat = 19.0178 + offset[0];
-    patrolLon = 72.8478 + offset[1];
+    // Patrol ~5km NW of Itarsi so ambulance travel to crash site is visible
+    patrolLat = 22.6500 + offset[0];
+    patrolLon = 77.7400 + offset[1];
     currentLat = patrolLat;
     currentLon = patrolLon;
 
@@ -130,13 +125,30 @@ class _ParamedicDashboardState extends State<ParamedicDashboard> {
       paramedicId,
     );
     if (response['status'] == 'success') {
+      // Build a 10-point corridor from crash → nearest hospital (~2 km south)
+      final baseLat = crashLocation?.latitude  ?? currentLat;
+      // Build a corridor from paramedic patrol location → crash site
+      final startLat = currentLat;
+      final startLon = currentLon;
+      final endLat = crashLocation?.latitude ?? currentLat;
+      final endLon = crashLocation?.longitude ?? currentLon;
+      
+      const steps = 10;
+      final latStep = (endLat - startLat) / steps;
+      final lonStep = (endLon - startLon) / steps;
+      
+      final route = List.generate(
+        steps + 1,
+        (i) => LatLng(startLat + latStep * i, startLon + lonStep * i),
+      );
+      
       setState(() {
         isDispatched = true;
-        // Start the ambulance at the crash location
-        if (crashLocation != null) {
-          currentLat = crashLocation!.latitude;
-          currentLon = crashLocation!.longitude;
-        }
+        greenCorridorRoute = route;
+        currentLat = startLat;
+        currentLon = startLon;
+        destLat = endLat;
+        destLon = endLon;
       });
       startDrivingSimulator();
     }
@@ -166,9 +178,21 @@ class _ParamedicDashboardState extends State<ParamedicDashboard> {
     final response = await BackendApi.scanPatientId("ABHA-123456");
     setState(() {
       isScanning = false;
-      if (response['status'] == 'success')
+      if (response['status'] == 'success') {
         triageSummary = response['ai_triage_summary'];
+        scanDone = true;  // ← unlock the Continue button
+      }
     });
+  }
+
+  /// Opens the ambulance tracking web app pre-loaded with crash coordinates.
+  Future<void> _openGreenCorridorMap() async {
+    final lat = crashLocation?.latitude ?? currentLat;
+    final lon = crashLocation?.longitude ?? currentLon;
+    final uri = Uri.parse('$_trackingAppBaseUrl/?lat=$lat&lng=$lon');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   void resetApp() {
@@ -179,6 +203,7 @@ class _ParamedicDashboardState extends State<ParamedicDashboard> {
       isPatrolling = true;
       isDispatched = false;
       isScanning = false;
+      scanDone = false;
       crashLocation = null;
       distToCrashKm = null;
       currentIncidentId = "";
@@ -428,11 +453,8 @@ class _ParamedicDashboardState extends State<ParamedicDashboard> {
                   borderRadius: BorderRadius.circular(12),
                   child: FlutterMap(
                     options: MapOptions(
-                      initialCenter: const LatLng(
-                        19.0090,
-                        72.8455,
-                      ), // Midpoint of Mumbai route
-                      initialZoom: 14.5,
+                      initialCenter: crashLocation ?? LatLng(currentLat, currentLon),
+                      initialZoom: 13.5,
                     ),
                     children: [
                       TileLayer(
@@ -543,6 +565,32 @@ class _ParamedicDashboardState extends State<ParamedicDashboard> {
                         ),
                       ),
                     ),
+                    // ── CONTINUE button — appears after scan succeeds ──
+                    if (scanDone) ...[
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        icon: const Icon(
+                          Icons.route_rounded,
+                          color: Colors.white,
+                        ),
+                        label: const Text(
+                          'CONTINUE → Green Corridor Map',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[700],
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: _openGreenCorridorMap,
+                      ),
+                    ],
                   ],
                 ),
               ),

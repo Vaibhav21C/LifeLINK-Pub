@@ -196,7 +196,25 @@ async def paramedic_heartbeat(hb: ParamedicHeartbeat):
     if hb.paramedic_id not in paramedic_locations:
         paramedic_locations[hb.paramedic_id] = {"lat": hb.lat, "lon": hb.lon, "status": "available"}
     else:
-        paramedic_locations[hb.paramedic_id].update({"lat": hb.lat, "lon": hb.lon})
+        # Only update location; keep existing status (e.g. "dispatched")
+        paramedic_locations[hb.paramedic_id]["lat"] = hb.lat
+        paramedic_locations[hb.paramedic_id]["lon"] = hb.lon
+        if "status" not in paramedic_locations[hb.paramedic_id]:
+            paramedic_locations[hb.paramedic_id]["status"] = "available"
+
+    # ── Retry assignment for any PENDING incident that has no assigned paramedic ──
+    # This handles the race where the camera fires BEFORE any paramedic registers.
+    for inc_id, data in active_incidents.items():
+        if data["status"] == "PENDING" and data.get("assigned_to") is None:
+            try:
+                parts = data["gps_location"].split(",")
+                crash_lat, crash_lon = float(parts[0].strip()), float(parts[1].strip())
+                _assign_nearest_paramedic(inc_id, crash_lat, crash_lon)
+                print(f"🔄 Retried assignment for {inc_id} → {data.get('assigned_to')}")
+            except Exception as e:
+                print(f"Retry assignment error: {e}")
+            break  # Only need to handle one unassigned incident at a time
+
     return {"status": "ok", "registered": list(paramedic_locations.keys())}
 
 
@@ -208,6 +226,7 @@ async def receive_crash(alert: CrashAlert):
         "assigned_to": None, "destination_hospital": None,
         "patient": None, "ai_summary": "Awaiting Paramedic Scan...",
         "amb_lat": 0.0, "amb_lon": 0.0,
+        "active_route": None, # Will store the selected Mapbox route coordinates
     }
     try:
         parts = alert.gps_location.split(",")
@@ -245,12 +264,50 @@ async def accept_dispatch(dispatch: DispatchAccept):
     return {"error": "Not found"}
 
 
-@app.post("/api/update-location")
-async def update_location(loc: LocationUpdate):
+class LocationUpdate(BaseModel):
+    incident_id: str
+    lat: float
+    lng: float
+
+@app.post("/api/update-ambulance-location")
+async def update_ambulance_location(loc: LocationUpdate):
+    """Called by the React tracking frontend every 2 seconds during simulation"""
     if loc.incident_id in active_incidents:
         active_incidents[loc.incident_id]["amb_lat"] = loc.lat
-        active_incidents[loc.incident_id]["amb_lon"] = loc.lon
-        green_corridor.update_dynamic_lights(loc.lat, loc.lon)
+        active_incidents[loc.incident_id]["amb_lon"] = loc.lng
+        green_corridor.update_dynamic_lights(loc.lat, loc.lng)
+    return {"status": "success"}
+
+@app.post("/api/update-location")
+async def update_location(loc: LocationUpdate):
+    """Legacy endpoint used by Flutter. We'll keep it but React uses the one above."""
+    if loc.incident_id in active_incidents:
+        active_incidents[loc.incident_id]["amb_lat"] = loc.lat
+        active_incidents[loc.incident_id]["amb_lon"] = loc.lng
+        green_corridor.update_dynamic_lights(loc.lat, loc.lng)
+    return {"status": "success"}
+
+class RouteSync(BaseModel):
+    incident_id: str
+    hospital_name: str
+    hosp_lat: float
+    hosp_lng: float
+    route_geometry: list  # list of [lng, lat] coords
+
+@app.post("/api/sync-route")
+async def sync_route(req: RouteSync):
+    """Called by the React frontend when a hospital is selected and tracking starts"""
+    if req.incident_id in active_incidents:
+        active_incidents[req.incident_id]["destination_hospital"] = {
+            "name": req.hospital_name,
+            "lat": req.hosp_lat,
+            "lng": req.hosp_lng
+        }
+        active_incidents[req.incident_id]["active_route"] = req.route_geometry
+        
+        # Generate dynamic traffic lights along the actual route
+        green_corridor.generate_traffic_lights_from_route(req.route_geometry)
+        
     return {"status": "success"}
 
 
@@ -260,8 +317,8 @@ async def process_triage(scan: QRScan):
     for inc_id, data in active_incidents.items():
         if data["status"] == "ASSIGNED":
 
-            patient_wallet = "0x_patient_address"
-            doctor_wallet = "0x_doctor_address" 
+            patient_wallet = "0x9D125dB265665cd0e142a4C46ad2d7365f249B2e"
+            doctor_wallet = "0x82B9b36DbE485670D604938678dC3cEe39700d69" 
             
             print("🔗 Querying Polygon Blockchain for Medical Records...")
             
@@ -284,14 +341,25 @@ async def process_triage(scan: QRScan):
 @app.get("/api/er-updates")
 async def get_er_updates():
     for inc_id, data in active_incidents.items():
-        if data["status"] == "ASSIGNED":
+        if data["status"] in ("PENDING", "ASSIGNED"):
+            # Extract crash coords correctly
+            crash_lat, crash_lon = 0.0, 0.0
+            if data["gps_location"]:
+                parts = data["gps_location"].split(",")
+                if len(parts) == 2:
+                    crash_lat, crash_lon = float(parts[0].strip()), float(parts[1].strip())
+                    
             return {
-                "status":    "incoming",
-                "patient":   data["patient"],
-                "ai_summary": data["ai_summary"],
-                "amb_lat":   data["amb_lat"],
-                "amb_lon":   data["amb_lon"],
-                "lights":    green_corridor.IOT_TRAFFIC_LIGHTS,
+                "status":       "incoming",
+                "patient":      data.get("patient"),
+                "ai_summary":   data.get("ai_summary", "Awaiting paramedic scan..."),
+                "amb_lat":      data.get("amb_lat", 0.0),
+                "amb_lon":      data.get("amb_lon", 0.0),
+                "crash_lat":    crash_lat,
+                "crash_lon":    crash_lon,
+                "hospital":     data.get("destination_hospital"),
+                "route":        data.get("active_route"),
+                "lights":       green_corridor.get_current_lights(),
             }
     return {"status": "waiting"}
 
@@ -307,6 +375,29 @@ async def clear_er():
 @app.get("/api/paramedics")
 async def get_paramedics():
     return {"paramedics": paramedic_locations}
+
+
+@app.get("/api/active-incident")
+async def get_active_incident():
+    """
+    Ambulance tracking frontend polls this to know when a crash has been
+    detected. Returns the crash GPS so the frontend can auto-launch
+    hospital search without a manual pin drop.
+    Triggers for BOTH 'PENDING' (just detected) and 'ASSIGNED' (paramedic accepted).
+    """
+    for inc_id, data in active_incidents.items():
+        if data["status"] in ("PENDING", "ASSIGNED"):
+            try:
+                parts = data["gps_location"].split(",")
+                return {
+                    "status":      "found",
+                    "incident_id": inc_id,
+                    "lat":         float(parts[0].strip()),
+                    "lng":         float(parts[1].strip()),
+                }
+            except Exception:
+                pass
+    return {"status": "waiting"}
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -425,8 +516,15 @@ def get_route(
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=502, detail=f"Mapbox error: {e}")
+        print(f"Mapbox driving-traffic failed: {e}. Falling back to driving profile...")
+        fallback_url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{src_lng},{src_lat};{dst_lng},{dst_lat}"
+        try:
+            resp = requests.get(fallback_url, params=params, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e2:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=502, detail=f"Mapbox fallback error: {e2}")
 
     if not data.get("routes"):
         from fastapi import HTTPException
@@ -492,8 +590,15 @@ def get_alternative_routes(
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=502, detail=f"Mapbox error: {e}")
+        print(f"Mapbox alt driving-traffic failed: {e}. Falling back to driving profile...")
+        fallback_url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{src_lng},{src_lat};{dst_lng},{dst_lat}"
+        try:
+            resp = requests.get(fallback_url, params=params, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e2:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=502, detail=f"Mapbox fallback error: {e2}")
 
     if not data.get("routes"):
         from fastapi import HTTPException

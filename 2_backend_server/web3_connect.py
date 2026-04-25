@@ -8,7 +8,7 @@ RPC_URL = "https://rpc-amoy.polygon.technology/"
 w3 = Web3(Web3.HTTPProvider(RPC_URL))
 
 # Tell your teammate to paste the deployed address of 'MedicalRecords.sol' here
-CONTRACT_ADDRESS = "0x_contract_address"
+CONTRACT_ADDRESS = "0x6EF09a8f3D57423827386650650df02ca29C48b1"
 
 # This is the simplified ABI (Application Binary Interface) just for the getRecords function
 ABI = [

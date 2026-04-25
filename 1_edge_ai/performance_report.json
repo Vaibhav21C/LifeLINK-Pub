@@ -1,0 +1,149 @@
+{
+  "model": {
+    "architecture": "YOLOv8s",
+    "weights": "best.pt",
+    "size_mb": 6.0,
+    "classes": [
+      "Accident",
+      "Non Accident"
+    ],
+    "input_size": 640,
+    "training_epochs": 100,
+    "optimizer": "AdamW",
+    "augmentation": true
+  },
+  "image_results": [
+    {
+      "file": "image1.jpg",
+      "inference_ms": 254.5,
+      "total_detections": 2,
+      "accident_detections": 0,
+      "non_accident_detections": 2,
+      "max_accident_conf": 0,
+      "detections": [
+        {
+          "class": "Non Accident",
+          "confidence": 0.467
+        },
+        {
+          "class": "Non Accident",
+          "confidence": 0.4586
+        }
+      ]
+    },
+    {
+      "file": "image2.jpg",
+      "inference_ms": 82.6,
+      "total_detections": 1,
+      "accident_detections": 1,
+      "non_accident_detections": 0,
+      "max_accident_conf": 0.7022,
+      "detections": [
+        {
+          "class": "Accident",
+          "confidence": 0.7022
+        }
+      ]
+    },
+    {
+      "file": "image3.jpg",
+      "inference_ms": 88.5,
+      "total_detections": 0,
+      "accident_detections": 0,
+      "non_accident_detections": 0,
+      "max_accident_conf": 0,
+      "detections": []
+    },
+    {
+      "file": "image4.jpg",
+      "inference_ms": 63.0,
+      "total_detections": 1,
+      "accident_detections": 1,
+      "non_accident_detections": 0,
+      "max_accident_conf": 0.7584,
+      "detections": [
+        {
+          "class": "Accident",
+          "confidence": 0.7584
+        }
+      ]
+    },
+    {
+      "file": "image5.jpg",
+      "inference_ms": 46.1,
+      "total_detections": 0,
+      "accident_detections": 0,
+      "non_accident_detections": 0,
+      "max_accident_conf": 0,
+      "detections": []
+    },
+    {
+      "file": "image6.jpg",
+      "inference_ms": 59.6,
+      "total_detections": 0,
+      "accident_detections": 0,
+      "non_accident_detections": 0,
+      "max_accident_conf": 0,
+      "detections": []
+    },
+    {
+      "file": "image7.jpg",
+      "inference_ms": 57.6,
+      "total_detections": 1,
+      "accident_detections": 1,
+      "non_accident_detections": 0,
+      "max_accident_conf": 0.4929,
+      "detections": [
+        {
+          "class": "Accident",
+          "confidence": 0.4929
+        }
+      ]
+    }
+  ],
+  "video_results": [
+    {
+      "file": "video2.mp4",
+      "total_frames": 454,
+      "sampled_frames": 227,
+      "accident_frames": 75,
+      "detection_rate_pct": 33.0,
+      "avg_confidence": 0.7996,
+      "avg_inference_ms": 33.7
+    },
+    {
+      "file": "video3.mp4",
+      "total_frames": 675,
+      "sampled_frames": 135,
+      "accident_frames": 31,
+      "detection_rate_pct": 23.0,
+      "avg_confidence": 0.6545,
+      "avg_inference_ms": 44.2
+    },
+    {
+      "file": "test_crash.mp4",
+      "total_frames": 529,
+      "sampled_frames": 106,
+      "accident_frames": 19,
+      "detection_rate_pct": 17.9,
+      "avg_confidence": 0.661,
+      "avg_inference_ms": 40.8
+    },
+    {
+      "file": "testing1.mp4",
+      "total_frames": 356,
+      "sampled_frames": 60,
+      "accident_frames": 14,
+      "detection_rate_pct": 23.3,
+      "avg_confidence": 0.6942,
+      "avg_inference_ms": 44.6
+    }
+  ],
+  "summary": {
+    "images_evaluated": 7,
+    "avg_image_inference_ms": 93.1,
+    "videos_evaluated": 4,
+    "total_sampled_frames": 528,
+    "total_accident_frames": 139
+  }
+}

@@ -26,8 +26,8 @@ while cap.isOpened():
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         continue
 
-    # Run AI inference. Adjust 'conf' up or down based on your new model's strictness
-    results = model(frame, verbose=False, conf=0.60) 
+    # Run AI inference. Increased 'conf' to 0.85 to avoid false positives on normal traffic
+    results = model(frame, verbose=False, conf=0.85) 
     crash_detected_this_frame = False
 
     # Parse the YOLO bounding boxes
@@ -67,7 +67,7 @@ while cap.isOpened():
         # Call the external trigger file
         success = trigger_client.fire_trigger(
             incident_id="CRASH-991",
-            location="22.6116, 77.7810", # Mock CCTV GPS coordinates
+            location="22.6116, 77.7810", # Mock CCTV GPS — Itarsi, MP
             severity="HIGH"
         )
         
