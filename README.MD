@@ -81,3 +81,6 @@ python edge_camera.py
 The local video feed will open. Upon collision, the YOLO model will trigger the cloud backend, dispatching the Flutter app and updating the ER dashboard in real-time.
 =======
 The local video feed will open. Upon collision, the YOLO model will trigger the cloud backend, dispatching the Flutter app and updating the ER dashboard in real-time.
+
+**Note**
+The live AWS EC2 deployment is currently paused to save student/cloud credits.
